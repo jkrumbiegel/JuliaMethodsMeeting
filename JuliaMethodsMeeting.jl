@@ -1,3 +1,7 @@
+
+# first, we set up a very general function for how we want a trial of our simulation to work
+# we don't need to annotate this with any types
+
 """
     run_trial(observer, task)
 
@@ -19,6 +23,9 @@ end
 
 
 
+
+
+
 """
 An abstract representation of the outcome of one trial
 """
@@ -32,6 +39,11 @@ end
 Trial("a", "win")
 Trial(1, "100 dollars")
 Trial(5.0, false)
+
+
+
+
+
 
 
 
@@ -77,9 +89,13 @@ function learn end
 
 
 
-# now we define the logic of a whole experimental run
 
-function run_experiment(observer, task, ntrials)
+
+
+# now we define the logic of a whole experimental run
+# again, we don't have to use any type annotations (almost)
+
+function simulate_experiment(observer, task, ntrials)
 
     observer, first_trial = run_trial(observer, task)
 
@@ -87,12 +103,17 @@ function run_experiment(observer, task, ntrials)
     trials = Vector{typeof(first_trial)}(undef, ntrials)
     trials[1] = first_trial
 
+    # run through the rest of the trials while updating the observer
     for i in 2:ntrials
         observer, trials[i] = run_trial(observer, task)
     end
 
     trials
 end
+
+
+
+
 
 
 
@@ -109,12 +130,15 @@ A task with N slots that each have a winning probability between 0 and 1.
 """
 struct SlotsTask{N}
     probs::SVector{N, Float64} # a vector of probabilities for winning on each slot machine
-
-    function SlotsTask(probs...)
-        N = length(probs)
-        new{N}(SVector{N, Float64}(probs...))
-    end
 end
+
+
+function SlotsTask(probs...)
+    N = length(probs)
+    SlotsTask(SVector{N, Float64}(probs...))
+end
+
+
 
 
 # create a few instances as a test
@@ -130,35 +154,49 @@ slotstask = SlotsTask(0.2, 0.8)
 
 
 
-
+# now we create our first concrete observer type
+# it's a random observer and it doesn't have any fields
 
 struct RandomObserver end
 
 
-run_experiment(RandomObserver(), slotstask, 1_000)
+# let's try to run the experiment with the random observer and our task
+
+simulate_experiment(RandomObserver(), slotstask, 1_000)
+
+# there is no suitable method available for decide
+# we can check which methods are defined for a function
 
 methods(decide)
 
+# let's define one for our current combination of observer and task
 
 decide(::RandomObserver, ::SlotsTask{N}) where N = rand(1:N)
 
+# check the methods again...
+
 methods(decide)
 
-run_experiment(RandomObserver(), slotstask, 1_000)
+# and try to run the experiment
 
+simulate_experiment(RandomObserver(), slotstask, 1_000)
 
-
+# we need another method
 
 determine_outcome(g::SlotsTask, decision::Int) = rand() <= g.probs[decision]
 
-run_experiment(RandomObserver(), slotstask, 1_000)
+# try again...
 
+simulate_experiment(RandomObserver(), slotstask, 1_000)
 
-
+# and one more...
 
 learn(r::RandomObserver, task, trial) = r
 
-random_outcomes = run_experiment(RandomObserver(), slotstask, 1_000)
+
+# now it should work!
+
+random_outcomes = simulate_experiment(RandomObserver(), slotstask, 1_000)
 
 
 
@@ -186,7 +224,7 @@ end
 # let's just save our specific trial type for convenience
 const SlotTrial = Trial{Int, Bool}
 
-run_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1_000)
+simulate_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1_000)
 
 methods(decide)
 
@@ -211,7 +249,7 @@ function learn(obs::SwitchOnLose{T}, ::SlotsTask{N}, trial) where {T, N}
     SwitchOnLose{T}(trial)
 end
 
-sol_outcomes = run_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1000)
+sol_outcomes = simulate_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1000)
 
 countmap(decision.(sol_outcomes))
 
@@ -300,7 +338,7 @@ end
 
 
 
-reswa_outcomes = run_experiment(
+reswa_outcomes = simulate_experiment(
         RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)),
         slotstask,
         1000)
@@ -339,11 +377,11 @@ tr = Trial(2, false)
 
 
 
-@btime run_experiment($r, $slotstask, 1000);
+@btime simulate_experiment($r, $slotstask, 1000);
 
 
 # let's try a rescorla wagner experiment with 10_000_000 trials
-run_experiment(RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)), slotstask, 10_000_000);
+simulate_experiment(RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)), slotstask, 10_000_000);
 
 
 # or let's try a grid of 10_000 RescorlaWagnerObservers with different learning rates
@@ -351,7 +389,7 @@ run_experiment(RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)), slotstask, 1
 alphas = LinRange(0, 1, 100)
 taus = LinRange(0.1, 20, 100)
 
-results = [run_experiment(RescorlaWagnerObserver(α, τ, SVector(0.0, 0.0)), slotstask, 1000)
+results = [simulate_experiment(RescorlaWagnerObserver(α, τ, SVector(0.0, 0.0)), slotstask, 1000)
     for α in alphas, τ in taus];
 
 typeof(results)
@@ -417,7 +455,7 @@ df = join(
 # now we run an experiment with 1000 trials for every combination
 
 outcomedf = @by df[!, [:task, :observer, :run],
-    trial = run_experiment(:observer[1], :task[1], 1000)]
+    trial = simulate_experiment(:observer[1], :task[1], 1000)]
 
 # and store outcomes and decisions in separate columns
 
