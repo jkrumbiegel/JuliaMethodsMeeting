@@ -50,12 +50,17 @@ function simulate_experiment(observer, task, ntrials)
 
     observer, first_trial = run_trial(observer, task)
 
-    # a pre-allocated (empty) vector of the correct trial type
+    # create a pre-allocated (empty) vector of the correct trial type.
+    # this is not strictly necessary but pre-allocation can save
+    # time in critical sections.
+    # we know the type of the vector elements from the first trial we ran:
     trials = Vector{typeof(first_trial)}(undef, ntrials)
     trials[1] = first_trial
 
     # run through the rest of the trials while updating the observer
     for i in 2:ntrials
+        # the observer is just overwritten each time with the updated
+        # one from run_trial, and the trials are saved in the vector
         observer, trials[i] = run_trial(observer, task)
     end
 
@@ -520,10 +525,14 @@ df = join(
 outcomedf = @by df[!, [:task, :observer, :run],
     trial = simulate_experiment(:observer[1], :task[1], 1000)]
 
-# and store outcomes and decisions in separate columns
+
+
+# we store outcomes and decisions in separate columns
 
 outcomedf.outcome = outcome.(outcomedf.trial)
 outcomedf.decision = decision.(outcomedf.trial)
+
+
 
 
 # let's find out how many wins the participants could accumulate across
@@ -538,7 +547,9 @@ avg_outcomes = @by outcomedf[
     ]
 
 
-# let's plot all the outcomes in a grouped bar chart
+
+
+# and finally let's plot all the outcomes in a grouped bar chart
 
 groupedbar(
     string.(avg_outcomes.task),
