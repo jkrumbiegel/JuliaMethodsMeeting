@@ -1,6 +1,22 @@
+using StaticArrays
+using StatsBase
+using Setfield
+using BenchmarkTools
+using Plots
+using DataFrames
+using FilteredGroupbyMacro
+using Statistics
+using StatsPlots
 
-# first, we set up a very general function for how we want a trial of our simulation to work
-# we don't need to annotate this with any types
+
+
+
+
+
+
+# first, we set up a very generic function for how we want a trial
+# of our simulation to work.
+# note that we don't need to annotate this with any types!
 
 """
     run_trial(observer, task)
@@ -20,74 +36,6 @@ function run_trial(observer, task)
     # return observer and trial
     (observer = updated_observer, trial = trial)
 end
-
-
-
-
-
-
-"""
-An abstract representation of the outcome of one trial
-"""
-struct Trial{S, T}
-    decision::S # what did the observer decide?
-    outcome::T # and what outcome did the decision bring?
-end
-
-
-# let's try creating some random Trial instances
-Trial("a", "win")
-Trial(1, "100 dollars")
-Trial(5.0, false)
-
-
-
-
-
-
-
-
-# now we define some function stubs that don't do anything
-# this not a necessary step but just so that we have more
-# descriptive errors in the next step (because Julia knows that
-# these functions exist, even if they don't do anything yet / have no
-# methods)
-
-
-"""
-    decision = decide(observer, task)
-
-Make a `decision` given an `observer` and a `task`.
-"""
-function decide end
-
-
-
-
-
-
-"""
-    outcome = determine_outcome(task, decision)
-
-Determine a `task` `outcome given a task and a decision.
-"""
-function determine_outcome end
-
-
-
-
-
-
-"""
-    updated_observer = learn(observer, task, trial)
-
-Create an `updated_observer` from an `observer` that has learned
-from a `trial` result in a specific `task`.
-"""
-function learn end
-
-
-
 
 
 
@@ -113,6 +61,67 @@ end
 
 
 
+# now we define function stubs for the three components of run_trial.
+# so far they don't do anything!
+# this not a necessary step but just so that we have more descriptive
+# errors in the next step (because Julia knows now that these functions
+# exist, even if they don't do anything yet / have no methods)
+
+
+"""
+    decision = decide(observer, task)
+
+Make a `decision` given an `observer` and a `task`.
+"""
+function decide end
+
+
+
+
+
+
+"""
+    outcome = determine_outcome(task, decision)
+
+Determine a task `outcome` given a `task` and a `decision`.
+"""
+function determine_outcome end
+
+
+
+
+
+
+"""
+    updated_observer = learn(observer, task, trial)
+
+Create an `updated_observer` from an `observer` that has learned
+from a `trial` result in a specific `task`.
+"""
+function learn end
+
+
+
+# we also need some really generic idea of what a Trial in our simulation is
+
+"""
+    struct Trial{S, T}
+
+An abstract representation of the outcome of one trial
+"""
+struct Trial{S, T}
+    decision::S # what did the observer decide?
+    outcome::T # and what outcome did the decision bring?
+end
+
+
+
+# let's try creating some random Trial instances:
+Trial("I choose A", "I won!")
+Trial(1, "100 dollars")
+Trial(5.0, false)
+
+
 
 
 
@@ -121,8 +130,6 @@ end
 # we now have all the abstract parts that we need for a simulation
 # lets make the first concrete part, an actual task
 
-
-using StaticArrays
 
 
 """
@@ -202,8 +209,6 @@ random_outcomes = simulate_experiment(RandomObserver(), slotstask, 1_000)
 
 decision(t::Trial) = t.decision
 outcome(t::Trial) = t.outcome
-
-using StatsBase
 
 countmap(decision.(random_outcomes))
 
@@ -314,8 +319,6 @@ methods(decide)
 
 
 
-using Setfield
-
 function learn(reswa::RescorlaWagnerObserver{N}, ::SlotsTask{N}, trial) where N
     i = trial.decision
 
@@ -354,7 +357,6 @@ countmap(decision.(reswa_outcomes))
 # now just a short demonstration how fast these generically written methods are
 
 
-using BenchmarkTools
 
 r = RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0))
 tr = Trial(2, false)
@@ -398,7 +400,6 @@ size(results)
 results[1, 1]
 
 
-using Plots
 
 heatmap(
     alphas,
@@ -418,11 +419,6 @@ heatmap(
 
 # and now just a quick demonstration of something more R-like with DataFrames
 # and plotting them
-
-
-using DataFrames
-using FilteredGroupbyMacro
-using Statistics
 
 
 # first we make a big data frame with all combinations of three tasks and four
@@ -475,7 +471,7 @@ avg_outcomes = @by outcomedf[
     ]
 
 
-using StatsPlots
+# let's plot all the outcomes in a grouped bar chart
 
 @df avg_outcomes groupedbar(
     string.(:task),
