@@ -1,3 +1,6 @@
+# first we get all our imports out of the way, because in Julia that may take a bit,
+# at least in the first run
+
 using StaticArrays
 using StatsBase
 using Setfield
@@ -102,7 +105,12 @@ function learn end
 
 
 
-# we also need some really generic idea of what a Trial in our simulation is
+
+
+
+
+
+# now we also need some really generic idea of what a Trial in our simulation is
 
 """
     struct Trial{S, T}
@@ -121,6 +129,11 @@ Trial("I choose A", "I won!")
 Trial(1, "100 dollars")
 Trial(5.0, false)
 
+# these won't work
+Trial("just one value")
+Trial(3, "different", :things)
+
+
 
 
 
@@ -133,12 +146,18 @@ Trial(5.0, false)
 
 
 """
-A task with N slots that each have a winning probability between 0 and 1.
+    struct SlotsTask{N}
+        probs::SVector{N, Float64}
+    end
+
+A task with N slot machines that each have a winning probability between 0 and 1.
 """
 struct SlotsTask{N}
     probs::SVector{N, Float64} # a vector of probabilities for winning on each slot machine
 end
 
+
+# we make a small constructor method that helps creating tasks (this is not necessary)
 
 function SlotsTask(probs...)
     N = length(probs)
@@ -150,10 +169,15 @@ end
 
 # create a few instances as a test
 SlotsTask(0.0, 1.0)
+SlotsTask(0, 1)
 SlotsTask(0.0, 0.3, 0.7)
+
+# this won't work
 SlotsTask("a", "b")
 
-# now create and save one task that we're going to use soon
+
+
+# now let's create and save one task that we're going to use soon
 slotstask = SlotsTask(0.2, 0.8)
 
 
@@ -162,7 +186,7 @@ slotstask = SlotsTask(0.2, 0.8)
 
 
 # now we create our first concrete observer type
-# it's a random observer and it doesn't have any fields
+# it's a random observer and it doesn't need any fields
 
 struct RandomObserver end
 
@@ -190,7 +214,7 @@ simulate_experiment(RandomObserver(), slotstask, 1_000)
 
 # we need another method
 
-determine_outcome(g::SlotsTask, decision::Int) = rand() <= g.probs[decision]
+determine_outcome(task::SlotsTask, decision::Int) = rand() <= task.probs[decision]
 
 # try again...
 
@@ -207,8 +231,15 @@ random_outcomes = simulate_experiment(RandomObserver(), slotstask, 1_000)
 
 
 
+
+# we create two helper functions to access the trial fields
+
 decision(t::Trial) = t.decision
 outcome(t::Trial) = t.outcome
+
+# now we can use these functions in a broadcasting expression (dot call syntax)
+# in this case that just means applying `decision` element-wise to the
+# random_outcomes array
 
 countmap(decision.(random_outcomes))
 
@@ -226,12 +257,28 @@ struct SwitchOnLose{T<:Trial}
     lasttrial::Union{Nothing, T} # the observer has to "remember" only the last trial
 end
 
+
+
+
+
+
 # let's just save our specific trial type for convenience
+# it's a trial where the decision takes form of an Integer (which slot was
+# chosen) and the outcome is a Bool (win or lose)
 const SlotTrial = Trial{Int, Bool}
 
-simulate_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1_000)
 
+# we make one observer
+sol_observer = SwitchOnLose{SlotTrial}(nothing)
+
+# and try to run a simulation with him
+simulate_experiment(sol_observer, slotstask, 1_000)
+
+# again we are missing a method, we only have the one for the random observer
 methods(decide)
+
+
+# let's create a new method that dispatches on a SwitchOnLose observer in a SlotsTask
 
 function decide(obs::SwitchOnLose, ::SlotsTask{N}) where N
 
@@ -239,20 +286,28 @@ function decide(obs::SwitchOnLose, ::SlotsTask{N}) where N
         return rand(1:N)
     end
 
-    if determine_outcome(obs.lasttrial) == true
+
+    if outcome(obs.lasttrial) == true
+        # if the observer won the last time he just repeats that decision
         decision(obs.lasttrial)
     else
+        # if he lost, he chooses randomly between the remaining N-1 choices
         options = tuple((i for i in 1:N if i != decision(obs.lasttrial))...)
         rand(options)
     end
 end
 
+# now we already have two decide methods!
 methods(decide)
 
+# a learn method is also needed for our new observer
 
 function learn(obs::SwitchOnLose{T}, ::SlotsTask{N}, trial) where {T, N}
     SwitchOnLose{T}(trial)
 end
+
+
+# now we can do a new simulation
 
 sol_outcomes = simulate_experiment(SwitchOnLose{SlotTrial}(nothing), slotstask, 1000)
 
@@ -271,10 +326,10 @@ countmap(decision.(sol_outcomes))
 
 
 
-struct RescorlaWagnerObserver{N, T}
+struct RescorlaWagnerObserver{N}
     α::Float64 # learning rate
     τ::Float64 # softmax temperature
-    expvalues::SVector{N, T} # the values currently assigned to the different choices
+    expvalues::SVector{N, Float64} # the values currently assigned to the different choices
 end
 
 # test creation
@@ -371,19 +426,22 @@ tr = Trial(2, false)
 # it's super fast! we can actually look at the type signatures in the whole function body
 # to learn whether Julia could infer all types correctly
 
+# this looks convoluted, but for now it's enough to know that blue is good
+
 @code_warntype learn(r, slotstask, tr)
 
 
+# let's time the decide method as well
+@btime decide($r, $slotstask)
 
-@btime decide(r, slotstask)
 
-
-
+# and a whole simulation run with 1000 trials
 @btime simulate_experiment($r, $slotstask, 1000);
 
 
-# let's try a rescorla wagner experiment with 10_000_000 trials
-simulate_experiment(RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)), slotstask, 10_000_000);
+# let's try a rescorla wagner experiment with 10_000_000 trials to drive
+# home the point that our generic functions looking like Python are fast like C
+@time simulate_experiment(r, slotstask, 10_000_000);
 
 
 # or let's try a grid of 10_000 RescorlaWagnerObservers with different learning rates
@@ -391,6 +449,8 @@ simulate_experiment(RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)), slotsta
 alphas = LinRange(0, 1, 100)
 taus = LinRange(0.1, 20, 100)
 
+# we can use array comprehension syntax for this which will return a nice two-dimensional
+# array because we iterate over 2 1-dimensional vectors: alphas and taus
 results = [simulate_experiment(RescorlaWagnerObserver(α, τ, SVector(0.0, 0.0)), slotstask, 1000)
     for α in alphas, τ in taus];
 
@@ -400,13 +460,16 @@ size(results)
 results[1, 1]
 
 
-
+# we can make a heatmap for the mean outcome of each combination really easily
+# using broadcasting and a small list comprehension again
 heatmap(
     alphas,
     taus,
+    # our heatmap values are the means for each array of outcomes that is
+    # extracted from each cell in our 100 x 100 grid of results
     mean.(outcome.(r) for r in results),
-    xlabel = "alpha",
-    ylabel = "tau",
+    xlabel = "alpha (learning rate)",
+    ylabel = "tau (softmax temp)",
     title = "rescorla wagner success rate")
 
 
@@ -421,7 +484,7 @@ heatmap(
 # and plotting them
 
 
-# first we make a big data frame with all combinations of three tasks and four
+# first we make a big data frame with all combinations of three tasks and five
 # observers, with 100 runs for each
 
 df = join(
@@ -431,13 +494,14 @@ df = join(
             SlotsTask(0.1, 0.9),
             SlotsTask(0.25, 0.75),
             SlotsTask(0.4, 0.6)]),
-    # four observers
+    # five observers
     DataFrame(
         observer = [
             RandomObserver(),
             SwitchOnLose{SlotTrial}(nothing),
             RescorlaWagnerObserver(0.9, 1.0, SVector(0.0, 0.0)),
             RescorlaWagnerObserver(0.05, 1.0, SVector(0.0, 0.0)),
+            RescorlaWagnerObserver(0.05, 5.0, SVector(0.0, 0.0)),
         ]),
     # 100 runs
     DataFrame(
@@ -450,13 +514,16 @@ df = join(
 
 # now we run an experiment with 1000 trials for every combination
 
+# the syntax for this is provided by a macro that I wrote myself because
+# I like the syntax from R's data.table
+
 outcomedf = @by df[!, [:task, :observer, :run],
     trial = simulate_experiment(:observer[1], :task[1], 1000)]
 
 # and store outcomes and decisions in separate columns
 
-outcomedf[:outcome] = outcome.(outcomedf[:trial])
-outcomedf[:decision] = decision.(outcomedf[:trial])
+outcomedf.outcome = outcome.(outcomedf.trial)
+outcomedf.decision = decision.(outcomedf.trial)
 
 
 # let's find out how many wins the participants could accumulate across
@@ -473,11 +540,11 @@ avg_outcomes = @by outcomedf[
 
 # let's plot all the outcomes in a grouped bar chart
 
-@df avg_outcomes groupedbar(
-    string.(:task),
-    :mean_p_win,
-    yerr = :sd_p_win,
-    group = string.(:observer),
+groupedbar(
+    string.(avg_outcomes.task),
+    avg_outcomes.mean_p_win,
+    yerr = avg_outcomes.sd_p_win,
+    group = string.(avg_outcomes.observer),
     ylabel = "Percentage of successes",
     xrotation = 30,
     ylims = (0, 1),
