@@ -48,7 +48,8 @@ end
 
 function simulate_experiment(observer, task, ntrials)
 
-    observer, first_trial = run_trial(observer, task)
+    updated_observer, first_trial = run_trial(observer, task)
+    observer = updated_observer
 
     # create a pre-allocated (empty) vector of the correct trial type.
     # this is not strictly necessary but pre-allocation can save
@@ -61,7 +62,8 @@ function simulate_experiment(observer, task, ntrials)
     for i in 2:ntrials
         # the observer is just overwritten each time with the updated
         # one from run_trial, and the trials are saved in the vector
-        observer, trials[i] = run_trial(observer, task)
+        updated_observer, trials[i] = run_trial(observer, task)
+        observer = updated_observer
     end
 
     trials
