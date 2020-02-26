@@ -1,0 +1,50 @@
+html {
+    font-family: Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    color: #e8e8e8;
+    font-weight: 300;
+    background-color: #3a424d;
+}
+
+
+code {
+    /* background-color: rgba(27,31,35,0.05); */
+    padding: 0.1em 0.2em;
+    border-radius: 2px;
+    font-size: 90%;
+
+}
+
+/* .franklin-content code { */
+    /* background-color: rgba(27,31,35,0.05); */
+    /* padding: 0.1em 0.2em; */
+    /* border-radius: 2px; */
+    /* font-size: 90%; } */
+
+pre .hljl {
+    font-size: 90%;
+    line-height: 1.35em;
+    border-radius: 10px;
+    color: rgb(213, 213, 213);
+    background-color: rgb(48, 55, 66);
+}
+
+.hljl-meta, .hljl-metas, .hljl-metap { font-weight: normal; }
+
+.hljl-meta { color: rgb(141, 179, 57); }
+
+.hljl-metas { color: red; }
+
+.hljl-metap { color: rgb(51, 131, 231); }
+
+.hljl-k { color: rgb(191, 70, 87);}
+
+.hljl-s { color: rgb(219, 181, 66);}
+
+.hljl-built_in { color: rgb(79, 135, 193);}
+
+.hljl-comment { color: rgb(86, 94, 108);}
+
+.hljl-number { color: rgb(176, 110, 169);}
+
+.hljl-literal { color: rgb(45, 168, 145);}
